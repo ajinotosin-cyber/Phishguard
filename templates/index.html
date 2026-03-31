@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+
+
+    <meta charset="UTF-8">
+
+    <title>PhishGuard</title>
+
+
+
+    <!-- Font -->
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+
+
+    <style>
+
+        body {
+
+            margin: 0;
+
+            font-family: 'Inter', sans-serif;
+
+            background: #0b1f3a;
+
+            color: #ffffff;
+
+        }
+
+
+
+        .container {
+
+            max-width: 900px;
+
+            margin: 60px auto;
+
+            padding: 40px;
+
+        }
+
+
+
+        h1 {
+
+            font-size: 40px;
+
+            font-weight: 600;
+
+        }
+
+
+
+        .subtitle {
+
+            color: #9bb3c9;
+
+            margin-top: 5px;
+
+            margin-bottom: 15px;
+
+        }
+
+
+
+        .scan-box {
+
+            display: flex;
+
+            gap: 10px;
+
+        }
+
+
+
+        input {
+
+            flex: 1;
+
+            padding: 14px;
+
+            border-radius: 6px;
+
+            border: none;
+
+        }
+
+
+
+        button {
+
+            background: #1f6feb;
+
+            border: none;
+
+            padding: 14px 20px;
+
+            color: white;
+
+            border-radius: 6px;
+
+            cursor: pointer;
+
+        }
+
+
+
+        .result {
+
+            margin-top: 30px;
+
+            padding: 20px;
+
+            border-radius: 8px;
+
+        }
+
+
+
+        .safe {
+
+            background: rgba(0, 200, 83, 0.1);
+
+            border: 1px solid #00c853;
+
+        }
+
+
+
+        .phishing {
+
+            background: rgba(255, 82, 82, 0.1);
+
+            border: 1px solid #ff5252;
+
+        }
+
+
+
+        .section {
+
+            margin-top: 15px;
+
+            font-size: 14px;
+
+            color: #9bb3c9;
+
+        }
+
+
+
+        /* PROGRESS BAR */
+
+        .progress-container {
+
+            width: 100%;
+
+            height: 12px;
+
+            background: #1c2f4a;
+
+            border-radius: 10px;
+
+            overflow: hidden;
+
+            margin-top: 8px;
+
+        }
+
+
+
+        .progress-bar {
+
+            height: 100%;
+
+            width: 0%;
+
+            border-radius: 10px;
+
+            transition: width 0.5s ease;
+
+        }
+
+
+
+        .bar-safe {
+
+            background: #00c853;
+
+        }
+
+
+
+        .bar-warning {
+
+            background: #ffd600;
+
+        }
+
+
+
+        .bar-danger {
+
+            background: #ff5252;
+
+        }
+
+
+
+        footer {
+
+            margin-top: 40px;
+
+            text-align: center;
+
+            font-size: 13px;
+
+            color: #9bb3c9;
+
+        }
+
+    </style>
+
+
+
+</head>
+
+
+
+<body>
+
+
+
+<div class="container">
+
+
+
+    <h1>PhishGuard</h1>
+
+    <p class="subtitle">Hybrid Multi-Layer Phishing Detection System</p>
+
+
+
+    <!-- FORM -->
+
+    <form method="POST">
+
+        <div class="scan-box">
+
+            <input type="text" name="url" placeholder="Enter website URL..." required>
+
+            <button type="submit">Scan</button>
+
+        </div>
+
+    </form>
+
+
+
+    <!-- RESULT -->
+
+    {% if result %}
+
+    <div class="result {{ box_color }}">
+
+
+
+        <h2>{{ result }}</h2>
+
+
+
+        <!-- THREAT SCORE -->
+
+        {% if final_score is not none %}
+
+        <div class="section">
+
+            <strong>Threat Score:</strong> {{ (final_score * 100) | round(2) }}%
+
+
+
+            <div class="progress-container">
+
+                <div 
+
+                    class="progress-bar 
+
+                    {% if final_score < 0.30 %}
+
+                        bar-safe
+
+                    {% elif final_score < 0.85 %}
+
+                        bar-warning
+
+                    {% else %}
+
+                        bar-danger
+
+                    {% endif %}"
+
+                    style="width: {{ (final_score * 100) | round(2) }}%;">
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% endif %}
+
+
+
+        <!-- RISK LEVEL -->
+
+        {% if risk_level %}
+
+        <div class="section">
+
+            <strong>Risk Level:</strong> {{ risk_level }}
+
+        </div>
+
+        {% endif %}
+
+
+
+        <!-- INDICATORS -->
+
+        {% if indicators %}
+
+        <div class="section">
+
+            <strong>Indicators:</strong>
+
+            <ul>
+
+                {% for i in indicators %}
+
+                <li>{{ i }}</li>
+
+                {% endfor %}
+
+            </ul>
+
+        </div>
+
+        {% endif %}
+
+
+
+        <!-- RECOMMENDATIONS -->
+
+        {% if recommendations %}
+
+        <div class="section">
+
+            <strong>Recommendations:</strong>
+
+            <ul>
+
+                {% for r in recommendations %}
+
+                <li>{{ r }}</li>
+
+                {% endfor %}
+
+            </ul>
+
+        </div>
+
+        {% endif %}
+
+
+
+    </div>
+
+    {% endif %}
+
+
+
+    <!-- FOOTER -->
+
+    <footer>
+
+        PhishGuard © 2026 • Engineered by Oluwatosin Deborah Ajinomisan
+
+    </footer>
+
+
+
+</div>
+
+
+
+</body>
+
+</html>
