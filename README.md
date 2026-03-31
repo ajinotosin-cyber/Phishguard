@@ -31,7 +31,6 @@ PhishGuard is a hybrid AI-powered phishing detection system that analyzes URLs t
 PhishGuard processes a URL by extracting structural and lexical features. These features are passed through both a traditional machine learning model and a neural network. The outputs are combined to produce a final threat score.
 
 
-
 Additional rule-based checks are applied to detect suspicious patterns and possible brand impersonation. The system then presents a classification along with supporting indicators and recommendations.
 
 
@@ -61,46 +60,6 @@ PhishGuard/
 ├── requirements.txt
 
 └── README.md
-
-
-
-## Installation
-
-
-
-1. Clone the repository:
-
-   git clone https://github.com/ajinotosin-cyber/phishguard-ml-detector.git
-
-   cd phishguard-ml-detector
-
-
-
-2. Create a virtual environment:
-
-   python -m venv venv
-
-
-
-3. Activate the environment:
-
-
-
-   Windows:
-
-   venv\Scripts\activate
-
-
-
-   macOS/Linux:
-
-   source venv/bin/activate
-
-
-
-4. Install dependencies:
-
-   pip install -r requirements.txt
 
 
 
@@ -144,7 +103,7 @@ Enter a URL into the input field and click "Scan". The system will return:
 
 - The system is calibrated to prioritize security, meaning borderline cases may be classified as phishing.
 
-- Model performance depends on the quality of the training dataset.
+- Model performance is dependent on the quality of the trained dataset.
 
 
 
