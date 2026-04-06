@@ -1,0 +1,26 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../AARIS-LITE"
+		},
+		{
+			"path": "../salary_prediction"
+		},
+		{
+			"path": "../CLEAR_project"
+		},
+		{
+			"path": "../mini_codes"
+		},
+		{
+			"path": "../nump_lib"
+		},
+		{
+			"path": "../data_set"
+		}
+	],
+	"settings": {}
+}
