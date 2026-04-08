@@ -68,7 +68,7 @@ def extract_features(url):
 
 
 
-    # ✅ Combined suspicious keywords (FIXED)
+    # Combined suspicious keywords
 
     suspicious_words = ['login', 'verify', 'update', 'secure', 'account', 'bank', 'signin', 'confirm']
 
@@ -120,13 +120,27 @@ def nn_predict_proba(url):
 
 
 
-# ---------------- INDICATORS ----------------
+# ---------------- SMART INDICATORS ----------------
 
-def generate_indicators(url):
+def generate_indicators(url, prediction):
 
     indicators = []
 
 
+
+    # ✅ If SAFE → show reassuring messages
+
+    if prediction == "safe":
+
+        indicators.append("No strong phishing patterns detected")
+
+        indicators.append("URL structure appears normal")
+
+        return indicators
+
+
+
+    # ❌ If PHISHING → show real issues
 
     if "login" in url:
 
@@ -160,7 +174,7 @@ def generate_indicators(url):
 
     if url.count(".") > 3:
 
-        indicators.append("Too many subdomains")
+        indicators.append("Unusually high number of subdomains")
 
 
 
@@ -172,7 +186,7 @@ def generate_indicators(url):
 
     if not indicators:
 
-        indicators.append("No obvious suspicious patterns detected")
+        indicators.append("Suspicious behavior detected by system")
 
 
 
@@ -266,15 +280,35 @@ if st.button("Scan URL"):
 
 
 
-        # Indicators + impersonation
-
-        indicators = generate_indicators(url)
+        # Impersonation
 
         impersonation = detect_impersonation(url)
 
 
 
-        suspicious_count = len(indicators)
+        # Temporary indicators (for counting only)
+
+        temp_indicators = [
+
+            "login" in url,
+
+            "verify" in url,
+
+            "update" in url,
+
+            "@" in url,
+
+            "http://" in url,
+
+            url.count(".") > 3,
+
+            re.search(r'\d+\.\d+\.\d+\.\d+', url)
+
+        ]
+
+
+
+        suspicious_count = sum(temp_indicators)
 
         if impersonation:
 
@@ -291,6 +325,12 @@ if st.button("Scan URL"):
         else:
 
             prediction = "safe"
+
+
+
+        # ✅ Now generate correct indicators AFTER decision
+
+        indicators = generate_indicators(url, prediction)
 
 
 
