@@ -134,7 +134,7 @@ def generate_indicators(url):
 
     if not indicators:
 
-        indicators.append("No obvious suspicious patterns")
+        indicators.append("No rule-based flags, but ML detected risk")
 
 
 
@@ -188,8 +188,6 @@ def detect_impersonation(url):
 
 # ---------------- STREAMLIT UI ----------------
 
-
-
 st.set_page_config(page_title="PhishGuard", layout="centered")
 
 
@@ -204,7 +202,7 @@ url = st.text_input("Enter a URL to check:")
 
 
 
-if st.button("Check URL"):
+if st.button("Scan URL"):
 
     if url:
 
@@ -214,17 +212,13 @@ if st.button("Check URL"):
 
         features = extract_features(url)
 
-        ml_proba = model.predict_proba([features])[0]
-
-        ml_score = ml_proba[1]
+        ml_score = model.predict_proba([features])[0][1]
 
 
 
         # NN prediction
 
-        nn_proba = nn_predict_proba(url)
-
-        nn_score = nn_proba[1]
+        nn_score = nn_predict_proba(url)[1]
 
 
 
@@ -252,15 +246,15 @@ if st.button("Check URL"):
 
         indicators = generate_indicators(url)
 
+
+
+        # Impersonation
+
         impersonation = detect_impersonation(url)
 
-        if impersonation:
-
-            indicators.append(impersonation)
 
 
-
-        # Results display
+        # ---------------- RESULTS ----------------
 
         if prediction == 0:
 
@@ -282,21 +276,17 @@ if st.button("Check URL"):
 
 
 
-        # Scores
+        # Impersonation display
 
-        st.write("### Scores")
+        if impersonation:
 
-        st.write(f"ML Score: {ml_score:.3f}")
-
-        st.write(f"NN Score: {nn_score:.3f}")
-
-        st.write(f"Final Score: {final_score:.3f}")
+            st.warning(f"🚨 {impersonation}")
 
 
 
         # Indicators
 
-        st.write("### Indicators")
+        st.subheader("Indicators")
 
         for item in indicators:
 
@@ -304,6 +294,90 @@ if st.button("Check URL"):
 
 
 
+        # Recommendations
+
+        st.subheader("Recommendations")
+
+
+
+        if prediction == 0:
+
+            st.write("- Proceed normally")
+
+            st.write("- Always verify website authenticity")
+
+            st.write("- Avoid entering sensitive data unnecessarily")
+
+
+
+        elif prediction == 1:
+
+            st.write("- Do NOT enter personal or financial information")
+
+            st.write("- Exit the website immediately")
+
+            st.write("- Report the website")
+
+
+
+        else:
+
+            st.write("- Proceed with caution")
+
+            st.write("- Verify the domain carefully")
+
+            st.write("- Avoid logging in or submitting sensitive data")
+
+
+
     else:
 
         st.warning("Please enter a URL")
+
+
+
+# ---------------- FOOTER ----------------
+
+st.write("")
+
+st.write("")
+
+st.write("")
+
+
+
+st.markdown("""
+
+<style>
+
+.footer {
+
+    position: fixed;
+
+    left: 0;
+
+    bottom: 0;
+
+    width: 100%;
+
+    text-align: center;
+
+    color: grey;
+
+    font-size: 13px;
+
+    padding: 10px;
+
+}
+
+</style>
+
+
+
+<div class="footer">
+
+    PhishGuard &copy; • Engineered by Oluwatosin Deborah Ajinomisan
+
+</div>
+
+""", unsafe_allow_html=True)
