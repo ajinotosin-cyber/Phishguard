@@ -302,7 +302,7 @@ if st.button("Scan URL"):
 
             url.count(".") > 3,
 
-            re.search(r'\d+\.\d+\.\d+\.\d+', url)
+            bool(re.search(r'\d+\.\d+\.\d+\.\d+', url))
 
         ]
 
