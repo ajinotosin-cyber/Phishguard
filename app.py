@@ -118,23 +118,51 @@ def generate_indicators(url):
 
 
 
-    if "login" in url: indicators.append("Contains 'login'")
+    if "login" in url:
 
-    if "verify" in url: indicators.append("Contains 'verify'")
+        indicators.append("Contains login-related keyword")
 
-    if "update" in url: indicators.append("Contains 'update'")
 
-    if "@" in url: indicators.append("Contains @ symbol")
 
-    if "http://" in url: indicators.append("Uses HTTP (not secure)")
+    if "verify" in url:
 
-    if url.count(".") > 3: indicators.append("Too many subdomains")
+        indicators.append("Requests verification action")
+
+
+
+    if "update" in url:
+
+        indicators.append("Requests account update")
+
+
+
+    if "@" in url:
+
+        indicators.append("Contains unusual '@' symbol")
+
+
+
+    if "http://" in url:
+
+        indicators.append("Not secure (HTTP)")
+
+
+
+    if url.count(".") > 3:
+
+        indicators.append("Too many subdomains")
+
+
+
+    if re.search(r'\d+\.\d+\.\d+\.\d+', url):
+
+        indicators.append("Uses IP address instead of domain")
 
 
 
     if not indicators:
 
-        indicators.append("No rule-based flags, but ML detected risk")
+        indicators.append("No obvious suspicious patterns detected")
 
 
 
@@ -194,7 +222,7 @@ st.set_page_config(page_title="PhishGuard", layout="centered")
 
 st.title("🔐 PhishGuard")
 
-st.subheader("Hybrid Phishing Detection System (ML + Neural Network)")
+st.subheader("Smart Phishing Detection System")
 
 
 
@@ -202,7 +230,7 @@ url = st.text_input("Enter a URL to check:")
 
 
 
-if st.button("Scan URL"):
+if st.button("Check URL"):
 
     if url:
 
@@ -222,61 +250,57 @@ if st.button("Scan URL"):
 
 
 
-        # Hybrid decision
+        # Hybrid score
 
         final_score = (ml_score + nn_score) / 2
 
 
 
-        if final_score > 0.75:
-
-            prediction = 1
-
-        elif final_score < 0.40:
-
-            prediction = 0
-
-        else:
-
-            prediction = "suspicious"
-
-
-
-        # Indicators
+        # Indicators + impersonation
 
         indicators = generate_indicators(url)
-
-
-
-        # Impersonation
 
         impersonation = detect_impersonation(url)
 
 
 
+        suspicious_count = len(indicators)
+
+        if impersonation:
+
+            suspicious_count += 1
+
+
+
+        # FINAL DECISION LOGIC (balanced)
+
+        if final_score >= 0.65 or suspicious_count >= 2:
+
+            prediction = "phishing"
+
+        else:
+
+            prediction = "safe"
+
+
+
         # ---------------- RESULTS ----------------
 
-        if prediction == 0:
+        if prediction == "safe":
 
             st.success("✅ Safe Website")
 
             st.info("Risk Level: Low Risk")
 
-        elif prediction == 1:
+        else:
 
             st.error("⚠️ Phishing Website")
 
             st.error("Risk Level: High Risk")
 
-        else:
-
-            st.warning("⚠️ Suspicious Website")
-
-            st.warning("Risk Level: Medium Risk")
 
 
-
-        # Impersonation display
+        # Impersonation warning
 
         if impersonation:
 
@@ -290,7 +314,7 @@ if st.button("Scan URL"):
 
         for item in indicators:
 
-            st.write(f"- {item}")
+            st.write(f"• {item}")
 
 
 
@@ -300,33 +324,23 @@ if st.button("Scan URL"):
 
 
 
-        if prediction == 0:
+        if prediction == "safe":
 
-            st.write("- Proceed normally")
+            st.write("• Proceed normally")
 
-            st.write("- Always verify website authenticity")
+            st.write("• Always verify website authenticity")
 
-            st.write("- Avoid entering sensitive data unnecessarily")
-
-
-
-        elif prediction == 1:
-
-            st.write("- Do NOT enter personal or financial information")
-
-            st.write("- Exit the website immediately")
-
-            st.write("- Report the website")
+            st.write("• Avoid entering sensitive data unnecessarily")
 
 
 
         else:
 
-            st.write("- Proceed with caution")
+            st.write("• Do NOT enter personal or financial information")
 
-            st.write("- Verify the domain carefully")
+            st.write("• Exit the website immediately")
 
-            st.write("- Avoid logging in or submitting sensitive data")
+            st.write("• Report the website if possible")
 
 
 
@@ -376,8 +390,9 @@ st.markdown("""
 
 <div class="footer">
 
-    PhishGuard &copy; • Engineered by Oluwatosin Deborah Ajinomisan
+    PhishGuard © • Engineered by Oluwatosin Deborah Ajinomisan
 
 </div>
 
 """, unsafe_allow_html=True)
+

@@ -16,8 +16,6 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 
 
-
-
 # ---------------- LOAD DATA ----------------
 
 df = pd.read_csv("data/url_dataset.csv")
@@ -29,15 +27,25 @@ df = pd.read_csv("data/url_dataset.csv")
 df.columns = ["URL", "Label"]
 
 
+
 df["Label"] = df["Label"].map({
+
     "benign": 0,
+
     "legitimate": 0,
+
     "good": 0,
+
     "safe": 0,
+
     "phishing": 1,
+
     "bad": 1,
+
     "malicious": 1,
+
 })
+
 
 
 # Clean dataset
@@ -52,8 +60,6 @@ print("Dataset distribution:\n", df["Label"].value_counts())
 
 
 
-
-
 # ---------------- FEATURE EXTRACTION ----------------
 
 def extract_features(url):
@@ -64,11 +70,15 @@ def extract_features(url):
 
         parsed = urlparse(url)
 
+        domain = parsed.netloc
+
 
 
         features = []
 
 
+
+        # URL structure
 
         features.append(len(url))
 
@@ -86,25 +96,27 @@ def extract_features(url):
 
 
 
+        # Security
+
         features.append(1 if url.startswith("https://") else 0)
 
 
 
+        # IP address detection
+
         features.append(1 if re.search(r'\d+\.\d+\.\d+\.\d+', url) else 0)
 
-        features.append(1 if 'login' in url else 0)
 
-        features.append(1 if 'verify' in url else 0)
 
-        features.append(1 if 'update' in url else 0)
+        # Suspicious keywords (stronger signal)
 
-        features.append(1 if 'secure' in url else 0)
+        suspicious_words = ['login', 'verify', 'update', 'secure', 'account', 'bank', 'signin', 'confirm']
 
-        features.append(1 if 'account' in url else 0)
+        features.append(sum(word in url for word in suspicious_words))
 
 
 
-        domain = parsed.netloc
+        # Domain features
 
         features.append(len(domain))
 
@@ -112,9 +124,13 @@ def extract_features(url):
 
 
 
+        # URL depth
+
         features.append(url.count('/'))
 
 
+
+        # Suspicious TLDs
 
         suspicious_tlds = ['.xyz', '.tk', '.ml', '.ga', '.cf']
 
@@ -128,24 +144,25 @@ def extract_features(url):
 
     except:
 
-        return None  # skip bad URLs
-
-
+        return None
 
 
 
 # ---------------- BUILD FEATURES ----------------
 
 X_series = df["URL"].apply(extract_features)
+
 valid_rows = X_series[X_series.notnull()]
+
+
+
 X = pd.DataFrame(valid_rows.tolist())
+
 y = df.loc[valid_rows.index, "Label"]
 
 
 
 print("\nAfter cleaning:", len(X), "samples")
-
-
 
 
 
@@ -159,15 +176,21 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 
 
-
-
 # ---------------- TRAIN MODEL ----------------
 
-model = GradientBoostingClassifier()
+model = GradientBoostingClassifier(
+
+    n_estimators=200,
+
+    learning_rate=0.1,
+
+    max_depth=3
+
+)
+
+
 
 model.fit(X_train, y_train)
-
-
 
 
 
@@ -187,7 +210,7 @@ f1 = f1_score(y_test, y_pred)
 
 
 
-print("\n MODEL PERFORMANCE")
+print("\nMODEL PERFORMANCE")
 
 print("Accuracy :", round(accuracy, 4))
 
@@ -199,11 +222,9 @@ print("F1 Score :", round(f1, 4))
 
 
 
-print("\n Classification Report:\n")
+print("\nClassification Report:\n")
 
 print(classification_report(y_test, y_pred))
-
-
 
 
 
@@ -215,4 +236,7 @@ with open("model.pkl", "wb") as f:
 
 
 
-print("\n Model trained and saved successfully!")
+print("\nModel trained and saved successfully!")
+
+
+
