@@ -38,6 +38,8 @@ def extract_features(url):
 
 
 
+    # URL structure
+
     features.append(len(url))
 
     features.append(url.count('.'))
@@ -54,23 +56,27 @@ def extract_features(url):
 
 
 
+    # Security
+
     features.append(1 if url.startswith("https://") else 0)
 
 
 
+    # IP address detection
+
     features.append(1 if re.search(r'\d+\.\d+\.\d+\.\d+', url) else 0)
 
-    features.append(1 if 'login' in url else 0)
-
-    features.append(1 if 'verify' in url else 0)
-
-    features.append(1 if 'update' in url else 0)
-
-    features.append(1 if 'secure' in url else 0)
-
-    features.append(1 if 'account' in url else 0)
 
 
+    # ✅ Combined suspicious keywords (FIXED)
+
+    suspicious_words = ['login', 'verify', 'update', 'secure', 'account', 'bank', 'signin', 'confirm']
+
+    features.append(sum(word in url for word in suspicious_words))
+
+
+
+    # Domain features
 
     domain = parsed.netloc
 
@@ -80,9 +86,13 @@ def extract_features(url):
 
 
 
+    # URL depth
+
     features.append(url.count('/'))
 
 
+
+    # Suspicious TLDs
 
     suspicious_tlds = ['.xyz', '.tk', '.ml', '.ga', '.cf']
 
@@ -230,7 +240,7 @@ url = st.text_input("Enter a URL to check:")
 
 
 
-if st.button("Check URL"):
+if st.button("Scan URL"):
 
     if url:
 
@@ -272,7 +282,7 @@ if st.button("Check URL"):
 
 
 
-        # FINAL DECISION LOGIC (balanced)
+        # FINAL DECISION
 
         if final_score >= 0.65 or suspicious_count >= 2:
 
@@ -352,14 +362,6 @@ if st.button("Check URL"):
 
 # ---------------- FOOTER ----------------
 
-st.write("")
-
-st.write("")
-
-st.write("")
-
-
-
 st.markdown("""
 
 <style>
@@ -395,4 +397,3 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
-
