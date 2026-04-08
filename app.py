@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+import streamlit as st
 
 import pickle
 
@@ -7,10 +7,6 @@ import re
 import numpy as np
 
 from urllib.parse import urlparse
-
-
-
-app = Flask(__name__)
 
 
 
@@ -98,8 +94,6 @@ def extract_features(url):
 
 
 
-
-
 # ---------------- NN PREDICTION ----------------
 
 def nn_predict_proba(url):
@@ -113,8 +107,6 @@ def nn_predict_proba(url):
     proba = nn_model.predict_proba(features_scaled)[0]
 
     return proba
-
-
 
 
 
@@ -147,6 +139,8 @@ def generate_indicators(url):
 
 
     return indicators
+
+
 
 # ---------------- IMPERSONATION DETECTION ----------------
 
@@ -192,37 +186,27 @@ def detect_impersonation(url):
 
 
 
-# ---------------- ROUTE ----------------
-
-@app.route("/", methods=["GET", "POST"])
-
-def home():
+# ---------------- STREAMLIT UI ----------------
 
 
 
-    result = None
-
-    indicators = []
-
-    recommendations = []
-
-    box_color = ""
-
-    risk_level = None
+st.set_page_config(page_title="PhishGuard", layout="centered")
 
 
 
-    ml_score = None
+st.title("🔐 PhishGuard")
 
-    nn_score = None
-
-    final_score = None
+st.subheader("Hybrid Phishing Detection System (ML + Neural Network)")
 
 
 
-    if request.method == "POST":
+url = st.text_input("Enter a URL to check:")
 
-        url = request.form["url"]
+
+
+if st.button("Check URL"):
+
+    if url:
 
 
 
@@ -244,7 +228,7 @@ def home():
 
 
 
-        # ---------------- HYBRID DECISION ----------------
+        # Hybrid decision
 
         final_score = (ml_score + nn_score) / 2
 
@@ -267,98 +251,59 @@ def home():
         # Indicators
 
         indicators = generate_indicators(url)
+
         impersonation = detect_impersonation(url)
 
         if impersonation:
+
             indicators.append(impersonation)
 
 
 
-        # ---------------- RESULTS ----------------
+        # Results display
 
         if prediction == 0:
 
-            result = "Safe Website"
+            st.success("✅ Safe Website")
 
-            box_color = "safe"
-
-            risk_level = "Low Risk"
-
-            recommendations = [
-
-                "Proceed normally",
-
-                "Always verify website authenticity",
-
-                "Avoid entering sensitive data unnecessarily"
-
-            ]
-
-
+            st.info("Risk Level: Low Risk")
 
         elif prediction == 1:
 
-            result = "⚠️ Phishing Website"
+            st.error("⚠️ Phishing Website")
 
-            box_color = "phishing"
-
-            risk_level = "High Risk"
-
-            recommendations = [
-
-                "Do NOT enter personal or financial information",
-
-                "Exit the website immediately",
-
-                "Report the website if possible"
-
-            ]
-
-
+            st.error("Risk Level: High Risk")
 
         else:
 
-            result = "⚠️ Suspicious Website"
+            st.warning("⚠️ Suspicious Website")
 
-            box_color = "phishing"
-
-            risk_level = "Medium Risk"
-
-            recommendations = [
-
-                "Proceed with caution",
-
-                "Verify the domain carefully",
-
-                "Avoid logging in or submitting sensitive data"
-
-            ]
+            st.warning("Risk Level: Medium Risk")
 
 
 
-    return render_template(
+        # Scores
 
-        "index.html",
+        st.write("### Scores")
 
-        result=result,
+        st.write(f"ML Score: {ml_score:.3f}")
 
-        indicators=indicators,
+        st.write(f"NN Score: {nn_score:.3f}")
 
-        recommendations=recommendations,
-
-        box_color=box_color,
-
-        risk_level=risk_level,
-
-        ml_score=round(ml_score, 3) if ml_score is not None else None,
-
-        nn_score=round(nn_score, 3) if nn_score is not None else None,
-
-        final_score=round(final_score, 3) if final_score is not None else None
-
-    )
+        st.write(f"Final Score: {final_score:.3f}")
 
 
-if __name__ == "__main__":
 
-    app.run(host="0.0.0.0", port=10000)
+        # Indicators
+
+        st.write("### Indicators")
+
+        for item in indicators:
+
+            st.write(f"- {item}")
+
+
+
+    else:
+
+        st.warning("Please enter a URL")
