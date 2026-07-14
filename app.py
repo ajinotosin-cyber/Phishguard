@@ -1,198 +1,163 @@
 import streamlit as st
-
 import pickle
-
 import re
-
 import numpy as np
-
 from urllib.parse import urlparse
-
-
 
 # ---------------- LOAD MODELS ----------------
 
-with open("model.pkl", "rb") as f:
+try:
+    with open("model.pkl", "rb") as f:
+        gb_model = pickle.load(f)
 
-    model = pickle.load(f)
+    with open("nn_model.pkl", "rb") as f:
+        nn_model, scaler = pickle.load(f)
 
-
-
-with open("nn_model.pkl", "rb") as f:
-
-    nn_model, scaler = pickle.load(f)
-
-
+except FileNotFoundError:
+    st.error("Model files not found. Please train the models first.")
+    st.stop()
 
 # ---------------- FEATURE EXTRACTION ----------------
 
 def extract_features(url):
 
-    url = str(url).lower()
+    url = str(url).strip().lower()
+
+    # Automatically add HTTPS if omitted
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
 
     parsed = urlparse(url)
-
-
-
-    features = []
-
-
-
-    # URL structure
-
-    features.append(len(url))
-
-    features.append(url.count('.'))
-
-    features.append(url.count('-'))
-
-    features.append(url.count('@'))
-
-    features.append(url.count('?'))
-
-    features.append(url.count('='))
-
-    features.append(url.count('%'))
-
-
-
-    # Security
-
-    features.append(1 if url.startswith("https://") else 0)
-
-
-
-    # IP address detection
-
-    features.append(1 if re.search(r'\d+\.\d+\.\d+\.\d+', url) else 0)
-
-
-
-    # Combined suspicious keywords
-
-    suspicious_words = ['login', 'verify', 'update', 'secure', 'account', 'bank', 'signin', 'confirm']
-
-    features.append(sum(word in url for word in suspicious_words))
-
-
-
-    # Domain features
-
     domain = parsed.netloc
 
-    features.append(len(domain))
+    return [
 
-    features.append(domain.count('.'))
+        # 1 URL Length
+        len(url),
 
+        # 2 Number of dots
+        url.count("."),
 
+        # 3 Number of hyphens
+        url.count("-"),
 
-    # URL depth
+        # 4 Number of @
+        url.count("@"),
 
-    features.append(url.count('/'))
+        # 5 Number of ?
+        url.count("?"),
 
+        # 6 Number of =
+        url.count("="),
 
+        # 7 Number of %
+        url.count("%"),
 
-    # Suspicious TLDs
+        # 8 HTTPS
+        1 if url.startswith("https://") else 0,
 
-    suspicious_tlds = ['.xyz', '.tk', '.ml', '.ga', '.cf']
+        # 9 Uses IP Address
+        1 if re.search(r"\d+\.\d+\.\d+\.\d+", url) else 0,
 
-    features.append(1 if any(tld in domain for tld in suspicious_tlds) else 0)
+        # 10 login
+        1 if "login" in url else 0,
 
+        # 11 verify
+        1 if "verify" in url else 0,
 
+        # 12 update
+        1 if "update" in url else 0,
 
-    return features
+        # 13 secure
+        1 if "secure" in url else 0,
 
+        # 14 account
+        1 if "account" in url else 0,
 
+        # 15 Domain Length
+        len(domain),
 
-# ---------------- NN PREDICTION ----------------
+        # 16 Number of subdomains
+        domain.count("."),
 
-def nn_predict_proba(url):
+        # 17 URL Path Depth
+        len([x for x in parsed.path.split("/") if x]),
 
-    features = extract_features(url)
+        # 18 Suspicious TLD
+        1 if any(
+            domain.endswith(tld)
+            for tld in [
+                ".xyz",
+                ".tk",
+                ".ml",
+                ".ga",
+                ".cf"
+            ]
+        ) else 0
+
+    ]
+
+# ---------------- NEURAL NETWORK PREDICTION ----------------
+
+def nn_predict_proba(features):
 
     features = np.array(features).reshape(1, -1)
 
     features_scaled = scaler.transform(features)
 
-    proba = nn_model.predict_proba(features_scaled)[0]
-
-    return proba
-
-
+    return nn_model.predict_proba(features_scaled)[0]
 
 # ---------------- SMART INDICATORS ----------------
 
-def generate_indicators(url, prediction):
+def generate_indicators(url):
+
+    url = url.lower()
+
+    parsed = urlparse(url)
+    domain = parsed.netloc
 
     indicators = []
 
-
-
-    # ✅ If SAFE → show reassuring messages
-
-    if prediction == "safe":
-
-        indicators.append("No strong phishing patterns detected")
-
-        indicators.append("URL structure appears normal")
-
-        return indicators
-
-
-
-    # ❌ If PHISHING → show real issues
+    if re.search(r"\d+\.\d+\.\d+\.\d+", url):
+        indicators.append("Uses an IP address instead of a domain.")
 
     if "login" in url:
-
-        indicators.append("Contains login-related keyword")
-
-
+        indicators.append("Contains 'login' keyword.")
 
     if "verify" in url:
-
-        indicators.append("Requests verification action")
-
-
+        indicators.append("Contains 'verify' keyword.")
 
     if "update" in url:
+        indicators.append("Contains 'update' keyword.")
 
-        indicators.append("Requests account update")
+    if "secure" in url:
+        indicators.append("Contains 'secure' keyword.")
 
+    if "account" in url:
+        indicators.append("Contains 'account' keyword.")
 
+    if len(url) > 75:
+        indicators.append("URL is unusually long.")
 
-    if "@" in url:
+    if domain.count(".") > 3:
+        indicators.append("Contains many subdomains.")
 
-        indicators.append("Contains unusual '@' symbol")
-
-
-
-    if "http://" in url:
-
-        indicators.append("Not secure (HTTP)")
-
-
-
-    if url.count(".") > 3:
-
-        indicators.append("Unusually high number of subdomains")
-
-
-
-    if re.search(r'\d+\.\d+\.\d+\.\d+', url):
-
-        indicators.append("Uses IP address instead of domain")
-
-
+    if any(
+        domain.endswith(tld)
+        for tld in [
+            ".xyz",
+            ".tk",
+            ".ml",
+            ".ga",
+            ".cf"
+        ]
+    ):
+        indicators.append("Uses a suspicious top-level domain.")
 
     if not indicators:
-
-        indicators.append("Suspicious behavior detected by system")
-
-
+        indicators.append("No major phishing indicators detected.")
 
     return indicators
-
-
 
 # ---------------- IMPERSONATION DETECTION ----------------
 
@@ -200,240 +165,168 @@ def detect_impersonation(url):
 
     url = url.lower()
 
-
-
     trusted_brands = {
 
         "google": "google.com",
-
         "paypal": "paypal.com",
-
         "facebook": "facebook.com",
-
         "microsoft": "microsoft.com",
-
         "amazon": "amazon.com",
-
         "apple": "apple.com",
-
         "instagram": "instagram.com",
-
-        "netflix": "netflix.com",
-
-        "bank": "bank.com"
+        "netflix": "netflix.com"
 
     }
 
+    for brand, domain in trusted_brands.items():
 
-
-    for brand, real_domain in trusted_brands.items():
-
-        if brand in url and real_domain not in url:
-
+        if brand in url and domain not in url:
             return f"Possible impersonation of {brand.capitalize()}"
-
-
 
     return None
 
-
-
 # ---------------- STREAMLIT UI ----------------
 
-st.set_page_config(page_title="PhishGuard", layout="centered")
-
-
+st.set_page_config(
+    page_title="PhishGuard",
+    page_icon="🔐",
+    layout="centered"
+)
 
 st.title("🔐 PhishGuard")
+st.subheader("Hybrid Phishing Detection System")
 
-st.subheader("Smart Phishing Detection System")
-
-
-
-url = st.text_input("Enter a URL to check:")
-
-
+url = st.text_input(
+    "Enter a URL to scan:",
+    placeholder="https://example.com"
+)
 
 if st.button("Scan URL"):
 
-    if url:
+    if not url.strip():
 
+        st.warning("Please enter a URL.")
 
+    else:
 
-        # ML prediction
+        # ---------------- FEATURE EXTRACTION ----------------
 
         features = extract_features(url)
 
-        ml_score = model.predict_proba([features])[0][1]
+        # ---------------- GRADIENT BOOSTING ----------------
 
+        gb_score = gb_model.predict_proba([features])[0][1]
 
+        # ---------------- NEURAL NETWORK ----------------
 
-        # NN prediction
+        nn_score = nn_predict_proba(features)[1]
 
-        nn_score = nn_predict_proba(url)[1]
+        # ---------------- HYBRID SCORE ----------------
 
+        hybrid_score = (0.70 * gb_score) + (0.30 * nn_score)
 
-
-        # Hybrid score
-
-        final_score = (ml_score + nn_score) / 2
-
-
-
-        # Impersonation
+        # ---------------- IMPERSONATION ----------------
 
         impersonation = detect_impersonation(url)
 
+        # ---------------- FINAL DECISION ----------------
 
-
-        # Temporary indicators (for counting only)
-
-        temp_indicators = [
-
-            "login" in url,
-
-            "verify" in url,
-
-            "update" in url,
-
-            "@" in url,
-
-            "http://" in url,
-
-            url.count(".") > 3,
-
-            bool(re.search(r'\d+\.\d+\.\d+\.\d+', url))
-
-        ]
-
-
-
-        suspicious_count = sum(temp_indicators)
-
-        if impersonation:
-
-            suspicious_count += 1
-
-
-
-        # FINAL DECISION
-
-        if final_score >= 0.65 or suspicious_count >= 2:
+        if hybrid_score >= 0.80:
 
             prediction = "phishing"
+            risk = "High Risk"
+
+        elif hybrid_score >= 0.40:
+
+            prediction = "suspicious"
+            risk = "Medium Risk"
 
         else:
 
             prediction = "safe"
+            risk = "Low Risk"
 
-
-
-        # ✅ Now generate correct indicators AFTER decision
-
-        indicators = generate_indicators(url, prediction)
-
-
-
-        # ---------------- RESULTS ----------------
+       
+        # ---------------- FINAL VERDICT ----------------
 
         if prediction == "safe":
 
             st.success("✅ Safe Website")
+            st.info(f"Risk Level: {risk}")
 
-            st.info("Risk Level: Low Risk")
+        elif prediction == "suspicious":
+
+            st.warning("⚠️ Suspicious Website")
+            st.warning(f"Risk Level: {risk}")
 
         else:
 
-            st.error("⚠️ Phishing Website")
+            st.error("🚨 Phishing Website")
+            st.error(f"Risk Level: {risk}")
 
-            st.error("Risk Level: High Risk")
-
-
-
-        # Impersonation warning
+        # ---------------- IMPERSONATION WARNING ----------------
 
         if impersonation:
 
             st.warning(f"🚨 {impersonation}")
 
+       
+       # ---------------- RECOMMENDATIONS ----------------
 
-
-        # Indicators
-
-        st.subheader("Indicators")
-
-        for item in indicators:
-
-            st.write(f"• {item}")
-
-
-
-        # Recommendations
+        st.divider()
 
         st.subheader("Recommendations")
 
-
-
         if prediction == "safe":
 
-            st.write("• Proceed normally")
+            st.success("The website appears to be legitimate.")
 
-            st.write("• Always verify website authenticity")
+            st.write("• Proceed normally.")
+            st.write("• Always verify the website URL before entering sensitive information.")
+            st.write("• Keep your browser and antivirus software updated.")
 
-            st.write("• Avoid entering sensitive data unnecessarily")
+        elif prediction == "suspicious":
 
+            st.warning("This website shows some suspicious characteristics.")
 
+            st.write("• Verify the website's domain carefully.")
+            st.write("• Avoid entering passwords or financial information unless you are certain the website is legitimate.")
+            st.write("• Check for HTTPS and confirm the website belongs to the expected organization.")
 
         else:
 
-            st.write("• Do NOT enter personal or financial information")
+            st.error("This website is likely a phishing website.")
 
-            st.write("• Exit the website immediately")
-
-            st.write("• Report the website if possible")
-
-
-
-    else:
-
-        st.warning("Please enter a URL")
-
-
+            st.write("• Do NOT enter passwords or financial information.")
+            st.write("• Leave the website immediately.")
+            st.write("• Report the website if possible.")
+            st.write("• Access the official website directly instead of using the provided link.")
 
 # ---------------- FOOTER ----------------
 
-st.markdown("""
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        color: grey;
+        font-size: 13px;
+        padding: 10px;
+        background-color: transparent;
+    }
+    </style>
 
-<style>
-
-.footer {
-
-    position: fixed;
-
-    left: 0;
-
-    bottom: 0;
-
-    width: 100%;
-
-    text-align: center;
-
-    color: grey;
-
-    font-size: 13px;
-
-    padding: 10px;
-
-}
-
-</style>
+    <div class="footer">
+        <strong>PhishGuard</strong> © 2026 |
+        Engineered by <strong>Oluwatosin Deborah Ajinomisan</strong>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 
 
-<div class="footer">
-
-    PhishGuard © • Engineered by Oluwatosin Deborah Ajinomisan
-
-</div>
-
-""", unsafe_allow_html=True)

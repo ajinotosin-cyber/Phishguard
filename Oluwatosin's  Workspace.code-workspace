@@ -20,6 +20,30 @@
 		},
 		{
 			"path": "../data_set"
+		},
+		{
+			"path": "../Oluwatosin_Portfolio"
+		},
+		{
+			"path": "../ThreatScope"
+		},
+		{
+			"path": "../FortiPass"
+		},
+		{
+			"path": "../FortiCrypt"
+		},
+		{
+			"path": "../MailSentry"
+		},
+		{
+			"path": "../strix_bundle"
+		},
+		{
+			"path": "../EH_5"
+		},
+		{
+			"path": "../class_stuff"
 		}
 	],
 	"settings": {}
