@@ -216,112 +216,184 @@ def is_trusted_domain(url):
 
 # ---------------- STREAMLIT UI ----------------
 
+
 st.set_page_config(
     page_title="PhishGuard",
     page_icon="🔐",
     layout="centered"
 )
 
+
 st.title("🔐 PhishGuard")
 st.subheader("Smart Hybrid Phishing Detection System")
+
 
 url = st.text_input(
     "Enter a URL to scan:",
     placeholder="https://example.com"
 )
 
+
 if st.button("Scan URL"):
+
 
     if not url.strip():
 
+
         st.warning("Please enter a URL.")
+
 
     else:
 
+
         # ---------------- FEATURE EXTRACTION ----------------
+
 
         features = extract_features(url)
 
+
         # ---------------- MODEL PREDICTIONS ----------------
+
 
         gb_score = gb_model.predict_proba([features])[0][1]
         nn_score = nn_predict_proba(features)[1]
 
+
         # ---------------- HYBRID SCORE ----------------
+
 
         hybrid_score = (0.70 * gb_score) + (0.30 * nn_score)
 
+
         # ---------------- RULE-BASED CHECKS ----------------
+
 
         indicator_score = suspicious_score(url)
         impersonation = detect_impersonation(url)
         trusted = is_trusted_domain(url)
 
+
         # ---------------- FINAL DECISION ----------------
+
 
         if impersonation:
             prediction = "impersonation"
 
+
         elif trusted and hybrid_score < 0.80:
             prediction = "safe"
+
 
         elif hybrid_score >= 0.80:
             prediction = "phishing"
 
+
         elif hybrid_score >= 0.55 or indicator_score >= 3:
             prediction = "suspicious"
+
 
         else:
             prediction = "safe"
 
+
         # ---------------- FINAL VERDICT ----------------
+
 
         st.divider()
 
+
         if prediction == "impersonation":
+
 
             st.error("🚨 Impersonation Website")
             st.warning(impersonation)
 
+
         elif prediction == "safe":
+
 
             st.success("✅ Safe Website")
 
+
         elif prediction == "suspicious":
+
 
             st.warning("⚠️ Suspicious Website")
 
+
         else:
+
 
             st.error("🚨 Phishing Website")
 
+
         # ---------------- RECOMMENDATIONS ----------------
+
 
         st.divider()
         st.subheader("Recommendations")
 
-        if prediction == "safe":
 
-            st.success("The website appears to be legitimate.")
+        if prediction == "impersonation":
 
-            st.write("• Proceed normally.")
-            st.write("• Continue to verify URLs before entering sensitive information.")
+
+            st.write("• Do NOT enter usernames, passwords or banking information.")
+            st.write("• Verify the domain name carefully.")
+            st.write("• Visit the official website by typing the URL directly.")
+            st.write("• Report the website if you believe it is malicious.")
+
+
+        elif prediction == "safe":
+
+
+            st.write("• Continue browsing normally.")
+            st.write("• Always verify the URL before entering sensitive information.")
             st.write("• Keep your browser and antivirus software updated.")
+
 
         elif prediction == "suspicious":
 
-            st.warning("This website shows some suspicious characteristics.")
 
-            st.write("• Verify the website's domain carefully.")
-            st.write("• Avoid entering passwords or financial information unless you are certain the website is legitimate.")
-            st.write("• Check for HTTPS and confirm the website belongs to the expected organization.")
-            st.write("• If unsure, visit the official website directly.")
+            st.write("• Proceed with caution.")
+            st.write("• Verify that the domain belongs to the expected organization.")
+            st.write("• Avoid entering passwords or payment information until verified.")
+            st.write("• If unsure, leave the website and access the official site directly.")
+
 
         else:
 
-            st.error("This website is likely a phishing website.")
 
-            st.write("• Do NOT enter passwords or financial information.")
+
             st.write("• Leave the website immediately.")
-            st.write("• Report the website if possible.")
+            st.write("• Do NOT enter passwords, banking details or personal information.")
+            st.write("• Report the website to your browser or cybersecurity team.")
             st.write("• Access the official website directly instead of using the provided link.")
+
+
+# ---------------- FOOTER ----------------
+
+
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: relative;
+        margin-top: 40px;
+        width: 100%;
+        text-align: center;
+        color: grey;
+        font-size: 13px;
+        padding: 20px 0;
+        border-top: 1px solid #333333;
+    }
+    </style>
+
+
+    <div class="footer">
+        <strong>PhishGuard</strong> © 2026 <br>
+        Engineered by <strong>Oluwatosin Deborah Ajinomisan</strong>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
