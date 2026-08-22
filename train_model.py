@@ -1,7 +1,5 @@
 import pandas as pd
 import pickle
-import re
-from urllib.parse import urlparse
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
@@ -13,6 +11,8 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix
 )
+
+from features import extract_features
 
 # ---------------- LOAD DATA ----------------
 
@@ -39,97 +39,20 @@ df = df.drop_duplicates()
 print("Dataset distribution:")
 print(df["Label"].value_counts())
 
-# ---------------- FEATURE EXTRACTION ----------------
+# ---------------- BUILD FEATURE MATRIX ----------------
+# extract_features() is imported from features.py -- the same function
+# app.py and detector.py use at inference time, so the trained model's
+# expected feature order can never silently drift from what the app sends.
 
-def extract_features(url):
 
+def _safe_extract(url):
     try:
-
-        url = str(url).strip().lower()
-
-        # Automatically add HTTPS if omitted
-        if not url.startswith(("http://", "https://")):
-            url = "https://" + url
-
-        parsed = urlparse(url)
-        domain = parsed.netloc
-
-        features = [
-
-            # 1 URL Length
-            len(url),
-
-            # 2 Number of dots
-            url.count("."),
-
-            # 3 Number of hyphens
-            url.count("-"),
-
-            # 4 Number of @
-            url.count("@"),
-
-            # 5 Number of ?
-            url.count("?"),
-
-            # 6 Number of =
-            url.count("="),
-
-            # 7 Number of %
-            url.count("%"),
-
-            # 8 HTTPS
-            1 if url.startswith("https://") else 0,
-
-            # 9 IP Address
-            1 if re.search(r"\d+\.\d+\.\d+\.\d+", url) else 0,
-
-            # 10 login keyword
-            1 if "login" in url else 0,
-
-            # 11 verify keyword
-            1 if "verify" in url else 0,
-
-            # 12 update keyword
-            1 if "update" in url else 0,
-
-            # 13 secure keyword
-            1 if "secure" in url else 0,
-
-            # 14 account keyword
-            1 if "account" in url else 0,
-
-            # 15 Domain Length
-            len(domain),
-
-            # 16 Number of subdomains
-            domain.count("."),
-
-            # 17 URL Path Depth
-            len([x for x in parsed.path.split("/") if x]),
-
-            # 18 Suspicious TLD
-            1 if any(
-                domain.endswith(tld)
-                for tld in [
-                    ".xyz",
-                    ".tk",
-                    ".ml",
-                    ".ga",
-                    ".cf"
-                ]
-            ) else 0
-
-        ]
-
-        return features
-
+        return extract_features(url)
     except Exception:
-
         return None
 
-# ---------------- BUILD FEATURE MATRIX ----------------
 
-X_series = df["URL"].apply(extract_features)
+X_series = df["URL"].apply(_safe_extract)
 
 valid_rows = X_series[X_series.notnull()]
 

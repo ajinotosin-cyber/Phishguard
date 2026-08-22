@@ -1,0 +1,5 @@
+# Additional dependency needed ONLY to re-run train_model.py /
+# train_nn_model.py (loading data/url_dataset.csv). Install alongside
+# requirements.txt when retraining:
+#   pip install -r requirements.txt -r requirements-train.txt
+pandas

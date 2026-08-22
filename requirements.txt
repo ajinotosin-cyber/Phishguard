@@ -1,5 +1,7 @@
+# Runtime dependencies for the Streamlit app (app.py) and the shared
+# features.py / model_utils.py / detector.py CLI. numpy/scipy are pulled
+# in transitively by scikit-learn -- not imported directly by our code,
+# so not listed separately (pandas is NOT needed at runtime -- only by
+# the training scripts, see requirements-train.txt).
 streamlit
-pandas
 scikit-learn==1.8.0
-numpy
-joblib

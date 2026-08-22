@@ -1,399 +1,183 @@
 import streamlit as st
-import pickle
-import re
-import numpy as np
-from urllib.parse import urlparse
 
-# ---------------- LOAD MODELS ----------------
+import model_utils as mu
 
-try:
-    with open("model.pkl", "rb") as f:
-        gb_model = pickle.load(f)
-
-    with open("nn_model.pkl", "rb") as f:
-        nn_model, scaler = pickle.load(f)
-
-except FileNotFoundError:
-    st.error("Model files not found. Please train the models first.")
-    st.stop()
-
-# ---------------- TRUSTED DOMAINS ----------------
-
-SAFE_DOMAINS = [
-    "google.com",
-    "github.com",
-    "openai.com",
-    "microsoft.com",
-    "amazon.com",
-    "apple.com",
-    "facebook.com",
-    "instagram.com",
-    "netflix.com",
-    "paypal.com"
-]
-
-# ---------------- FEATURE EXTRACTION ----------------
-
-def extract_features(url):
-
-    url = str(url).strip().lower()
-
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    parsed = urlparse(url)
-    domain = parsed.netloc
-
-    return [
-
-        # 1 URL Length
-        len(url),
-
-        # 2 Number of dots
-        url.count("."),
-
-        # 3 Number of hyphens
-        url.count("-"),
-
-        # 4 Number of @
-        url.count("@"),
-
-        # 5 Number of ?
-        url.count("?"),
-
-        # 6 Number of =
-        url.count("="),
-
-        # 7 Number of %
-        url.count("%"),
-
-        # 8 HTTPS
-        1 if url.startswith("https://") else 0,
-
-        # 9 Uses IP Address
-        1 if re.search(r"\d+\.\d+\.\d+\.\d+", url) else 0,
-
-        # 10 login
-        1 if "login" in url else 0,
-
-        # 11 verify
-        1 if "verify" in url else 0,
-
-        # 12 update
-        1 if "update" in url else 0,
-
-        # 13 secure
-        1 if "secure" in url else 0,
-
-        # 14 account
-        1 if "account" in url else 0,
-
-        # 15 Domain Length
-        len(domain),
-
-        # 16 Number of subdomains
-        domain.count("."),
-
-        # 17 URL Path Depth
-        len([x for x in parsed.path.split("/") if x]),
-
-        # 18 Suspicious TLD
-        1 if any(
-            domain.endswith(tld)
-            for tld in (
-                ".xyz",
-                ".tk",
-                ".ml",
-                ".ga",
-                ".cf"
-            )
-        ) else 0
-    ]
-
-# ---------------- NEURAL NETWORK ----------------
-
-def nn_predict_proba(features):
-
-    features = np.array(features).reshape(1, -1)
-    features = scaler.transform(features)
-
-    return nn_model.predict_proba(features)[0]
-
-# ---------------- SUSPICIOUS FEATURE SCORE ----------------
-
-def suspicious_score(url):
-
-    url = url.lower()
-
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    parsed = urlparse(url)
-    domain = parsed.netloc
-
-    score = 0
-
-    if re.search(r"\d+\.\d+\.\d+\.\d+", url):
-        score += 2
-
-    if "login" in url:
-        score += 1
-
-    if "verify" in url:
-        score += 1
-
-    if "update" in url:
-        score += 1
-
-    if "secure" in url:
-        score += 1
-
-    if "account" in url:
-        score += 1
-
-    if len(url) > 75:
-        score += 1
-
-    if domain.count(".") > 3:
-        score += 1
-
-    if any(
-        domain.endswith(tld)
-        for tld in (
-            ".xyz",
-            ".tk",
-            ".ml",
-            ".ga",
-            ".cf"
-        )
-    ):
-        score += 2
-
-    return score
-
-# ---------------- IMPERSONATION DETECTION ----------------
-
-def detect_impersonation(url):
-
-    url = url.lower()
-
-    trusted_brands = {
-
-        "google": "google.com",
-        "paypal": "paypal.com",
-        "facebook": "facebook.com",
-        "microsoft": "microsoft.com",
-        "amazon": "amazon.com",
-        "apple": "apple.com",
-        "instagram": "instagram.com",
-        "netflix": "netflix.com"
-
-    }
-
-    for brand, real_domain in trusted_brands.items():
-
-        if brand in url and real_domain not in url:
-            return f"Possible impersonation of {brand.capitalize()}"
-
-    return None
-
-# ---------------- TRUSTED DOMAIN CHECK ----------------
-
-def is_trusted_domain(url):
-
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    parsed = urlparse(url)
-
-    domain = parsed.netloc.lower().replace("www.", "")
-
-    return any(
-        domain == trusted or domain.endswith("." + trusted)
-        for trusted in SAFE_DOMAINS
-    )
-
-
-# ---------------- STREAMLIT UI ----------------
-
+# ---------------------------------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------------------------------
 
 st.set_page_config(
     page_title="PhishGuard",
     page_icon="🔐",
-    layout="centered"
+    layout="centered",
 )
 
+# ---------------------------------------------------------------------------
+# CSS — preserves PhishGuard's existing dark navy / blue identity
+# (colors carried over from the project's own design: #0b1f3a background,
+# #1f6feb accent, #00c853 safe, #ff5252 danger), tightened for a more
+# polished, enterprise feel.
+# ---------------------------------------------------------------------------
 
-st.title("🔐 PhishGuard")
-st.subheader("Smart Hybrid Phishing Detection System")
+st.markdown("""
+<style>
+.stApp{
+    background: radial-gradient(circle at top, #12294f 0%, #0b1f3a 55%, #081729 100%);
+    color: #eaf1fb;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+.block-container{ padding-top: 2.2rem; max-width: 720px; }
 
+.pg-title{
+    font-size: 34px; font-weight: 700; margin-bottom: 0;
+    display: flex; align-items: center; gap: 10px;
+}
+.pg-subtitle{ color: #9bb3c9; font-size: 15px; margin-top: 2px; margin-bottom: 28px; }
 
-url = st.text_input(
-    "Enter a URL to scan:",
-    placeholder="https://example.com"
-)
+.stTextInput > div > div > input{
+    background:#0f2745 !important; color:#eaf1fb !important;
+    border:1px solid #23406b !important; border-radius:8px !important;
+    padding:12px 14px !important; font-size:15px !important;
+}
+.stButton > button{
+    background:#1f6feb !important; color:white !important; border:none !important;
+    border-radius:8px !important; padding:10px 22px !important; font-weight:600 !important;
+}
+.stButton > button:hover{ background:#3a82f2 !important; }
 
+.pg-card{
+    border-radius: 10px; padding: 20px 22px; margin-top: 22px; margin-bottom: 18px;
+    border: 1px solid; font-size: 15px;
+}
+.pg-card-safe{ background: rgba(0,200,83,.08); border-color: #1f9c50; }
+.pg-card-phish{ background: rgba(255,82,82,.08); border-color: #c23b3b; }
+.pg-card-impersonating{ background: rgba(255,82,82,.10); border-color: #c23b3b; }
+.pg-card-invalid{ background: rgba(155,179,201,.08); border-color: #3d5776; }
+.pg-card-unavailable{ background: rgba(255,193,7,.08); border-color: #b5860a; }
+.pg-card-failed{ background: rgba(255,82,82,.08); border-color: #c23b3b; }
 
-if st.button("Scan URL"):
+.pg-verdict{ font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.pg-note{ color: #b7c7db; font-size: 13.5px; margin-top: 2px; }
 
+.pg-rec-title{ font-size: 14px; font-weight: 700; color: #9bb3c9; margin: 22px 0 8px 0;
+    text-transform: uppercase; letter-spacing: .04em; }
+.pg-rec-list{ margin: 0; padding-left: 20px; color: #d7e2ef; font-size: 14.5px; line-height: 1.8; }
 
+.pg-footer{
+    margin-top: 46px; text-align: center; color: #6d8299; font-size: 12.5px;
+    border-top: 1px solid #1c3454; padding-top: 16px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="pg-title">🔐 PhishGuard</div>', unsafe_allow_html=True)
+st.markdown('<div class="pg-subtitle">Smart Hybrid Phishing Detection System</div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# MODEL LOADING — never crashes the app; degrades to heuristic-only mode
+# with a clearly labeled banner if the trained models can't be loaded.
+# ---------------------------------------------------------------------------
+
+if "models" not in st.session_state:
+    st.session_state.models = mu.load_models()
+
+models: mu.ModelBundle = st.session_state.models
+
+if not models.available:
+    st.warning(
+        f"⚠️ ML models are unavailable ({models.load_error}). "
+        f"PhishGuard will still run using rule-based heuristics only, but results "
+        f"will be less accurate than with the trained models. This is shown honestly "
+        f"rather than reporting a normal result.",
+    )
+
+# ---------------------------------------------------------------------------
+# INPUT
+# ---------------------------------------------------------------------------
+
+url = st.text_input("Enter a URL to scan:", placeholder="https://example.com")
+scan_clicked = st.button("Scan URL")
+
+RECOMMENDATIONS = {
+    mu.LABEL_IMPERSONATING: [
+        "Do NOT enter usernames, passwords or banking information.",
+        "Verify the domain name carefully.",
+        "Visit the official website by typing the URL directly.",
+        "Report the website if you believe it is malicious.",
+    ],
+    mu.LABEL_SAFE: [
+        "Continue browsing normally.",
+        "Always verify the URL before entering sensitive information.",
+        "Keep your browser and antivirus software updated.",
+    ],
+    mu.LABEL_PHISH: [
+        "Leave the website immediately.",
+        "Do NOT enter passwords, banking details, or personal information.",
+        "Report the website to your browser or cybersecurity team.",
+        "Access the official website directly instead of using the provided link.",
+    ],
+}
+
+VERDICT_DISPLAY = {
+    mu.LABEL_SAFE: ("✅ Safe Website", "pg-card-safe"),
+    mu.LABEL_PHISH: ("🚨 Phishing Website", "pg-card-phish"),
+    mu.LABEL_IMPERSONATING: ("🚨 Impersonation Website", "pg-card-impersonating"),
+}
+
+if scan_clicked:
     if not url.strip():
-
-
         st.warning("Please enter a URL.")
-
-
     else:
+        with st.spinner("Analyzing URL..."):
+            result = mu.scan_url(url, models)
 
+        if result.status == mu.STATUS_INVALID_INPUT:
+            st.markdown(
+                f'<div class="pg-card pg-card-invalid">'
+                f'<div class="pg-verdict">⚠️ Invalid Input</div>'
+                f'<div class="pg-note">{result.error_message} Enter a real URL or domain, e.g. '
+                f'https://example.com.</div></div>',
+                unsafe_allow_html=True,
+            )
 
-        # ---------------- FEATURE EXTRACTION ----------------
-
-
-        features = extract_features(url)
-
-
-        # ---------------- MODEL PREDICTIONS ----------------
-
-
-        gb_score = gb_model.predict_proba([features])[0][1]
-        nn_score = nn_predict_proba(features)[1]
-
-
-        # ---------------- HYBRID SCORE ----------------
-
-
-        hybrid_score = (0.70 * gb_score) + (0.30 * nn_score)
-
-
-        # ---------------- RULE-BASED CHECKS ----------------
-
-
-        indicator_score = suspicious_score(url)
-        impersonation = detect_impersonation(url)
-        trusted = is_trusted_domain(url)
-
-
-        # ---------------- FINAL DECISION ----------------
-
-
-        if impersonation:
-            prediction = "impersonation"
-
-
-        elif trusted and hybrid_score < 0.80:
-            prediction = "safe"
-
-
-        elif hybrid_score >= 0.80:
-            prediction = "phishing"
-
-
-        elif hybrid_score >= 0.55 or indicator_score >= 3:
-            prediction = "suspicious"
-
+        elif result.status == mu.STATUS_ANALYSIS_FAILED:
+            st.markdown(
+                f'<div class="pg-card pg-card-failed">'
+                f'<div class="pg-verdict">⚠️ Analysis Failed</div>'
+                f'<div class="pg-note">PhishGuard could not complete this scan: '
+                f'{result.error_message} No verdict is being shown because a failed '
+                f'analysis is never the same as a "Safe" result.</div></div>',
+                unsafe_allow_html=True,
+            )
 
         else:
-            prediction = "safe"
+            verdict_text, card_class = VERDICT_DISPLAY[result.label]
 
+            note = ""
+            if result.heuristic_only:
+                card_class = "pg-card-unavailable" if result.label == mu.LABEL_SAFE else card_class
+                note = "Result based on rule-based heuristics only — ML models were unavailable for this scan."
+            if result.impersonation_notice:
+                note = (note + " " if note else "") + result.impersonation_notice
 
-        # ---------------- FINAL VERDICT ----------------
+            st.markdown(
+                f'<div class="pg-card {card_class}">'
+                f'<div class="pg-verdict">{verdict_text}</div>'
+                + (f'<div class="pg-note">{note}</div>' if note else "")
+                + '</div>',
+                unsafe_allow_html=True,
+            )
 
+            st.markdown('<div class="pg-rec-title">Recommendations</div>', unsafe_allow_html=True)
+            items = "".join(f"<li>{r}</li>" for r in RECOMMENDATIONS[result.label])
+            st.markdown(f'<ul class="pg-rec-list">{items}</ul>', unsafe_allow_html=True)
 
-        st.divider()
-
-
-        if prediction == "impersonation":
-
-
-            st.error("🚨 Impersonation Website")
-            st.warning(impersonation)
-
-
-        elif prediction == "safe":
-
-
-            st.success("✅ Safe Website")
-
-
-        elif prediction == "suspicious":
-
-
-            st.warning("⚠️ Suspicious Website")
-
-
-        else:
-
-
-            st.error("🚨 Phishing Website")
-
-
-        # ---------------- RECOMMENDATIONS ----------------
-
-
-        st.divider()
-        st.subheader("Recommendations")
-
-
-        if prediction == "impersonation":
-
-
-            st.write("• Do NOT enter usernames, passwords or banking information.")
-            st.write("• Verify the domain name carefully.")
-            st.write("• Visit the official website by typing the URL directly.")
-            st.write("• Report the website if you believe it is malicious.")
-
-
-        elif prediction == "safe":
-
-
-            st.write("• Continue browsing normally.")
-            st.write("• Always verify the URL before entering sensitive information.")
-            st.write("• Keep your browser and antivirus software updated.")
-
-
-        elif prediction == "suspicious":
-
-
-            st.write("• Proceed with caution.")
-            st.write("• Verify that the domain belongs to the expected organization.")
-            st.write("• Avoid entering passwords or payment information until verified.")
-            st.write("• If unsure, leave the website and access the official site directly.")
-
-
-        else:
-
-
-
-            st.write("• Leave the website immediately.")
-            st.write("• Do NOT enter passwords, banking details or personal information.")
-            st.write("• Report the website to your browser or cybersecurity team.")
-            st.write("• Access the official website directly instead of using the provided link.")
-
-
-# ---------------- FOOTER ----------------
-
+# ---------------------------------------------------------------------------
+# FOOTER
+# ---------------------------------------------------------------------------
 
 st.markdown(
-    """
-    <style>
-    .footer {
-        position: relative;
-        margin-top: 40px;
-        width: 100%;
-        text-align: center;
-        color: grey;
-        font-size: 13px;
-        padding: 20px 0;
-        border-top: 1px solid #333333;
-    }
-    </style>
-
-
-    <div class="footer">
-        <strong>PhishGuard</strong> © 2026 <br>
-        Engineered by <strong>Oluwatosin Deborah Ajinomisan</strong>
-    </div>
-    """,
-    unsafe_allow_html=True
+    '<div class="pg-footer"><strong>PhishGuard</strong> © 2026<br>'
+    'Engineered by <strong>Oluwatosin Deborah Ajinomisan</strong></div>',
+    unsafe_allow_html=True,
 )
-

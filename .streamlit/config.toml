@@ -1,0 +1,9 @@
+# Native Streamlit dark theme matched to PhishGuard's existing navy/blue
+# identity (see app.py's own CSS for the exact palette this mirrors).
+[theme]
+base = "dark"
+primaryColor = "#1f6feb"
+backgroundColor = "#0b1f3a"
+secondaryBackgroundColor = "#0f2745"
+textColor = "#eaf1fb"
+font = "sans serif"
