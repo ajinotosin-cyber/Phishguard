@@ -30,37 +30,21 @@ You enter a URL. PhishGuard:
    being on that brand's real domain?).
 5. **Produces one of three labels** — see below.
 
-## Safe / Phish / Impersonating — what each means
+## Safe / Suspicious / Phish / Impersonating — what each means
 
-- **Impersonating** — the URL mentions a recognized brand name but isn't
-  on that brand's real domain. This check doesn't need the ML models at
-  all; it fires first and short-circuits the rest of the pipeline.
-- **Phish** — the hybrid ML score is high, or enough individual
-  suspicious indicators fired (IP-address URL, suspicious keywords,
-  excessive length, suspicious TLD, etc.), regardless of what the ML
-  score alone said.
-- **Safe** — none of the above triggered, and (if the ML models are
-  available) the hybrid score was low.
+- **Impersonating** — the URL's *actual domain* mentions a recognized
+  brand name but isn't genuinely that brand's real domain (or a real
+  subdomain of it). This check doesn't need the ML models at all; it
+  fires first and short-circuits the rest of the pipeline.
+- **Phish** — either multiple concrete, independent red flags fired
+  (IP-address hostname, `@` obfuscation, phishing keywords, excessive
+  subdomains, suspicious TLD), or the hybrid ML score is high-confidence
+  (≥0.80).
+- **Safe** — a curated, well-known trusted domain, OR the hybrid score is
+  low (<0.30) *and* zero heuristic red flags fired at all.
+- **Suspicious** — everything in between: the evidence genuinely doesn't
+  clearly support Safe or Phish. This is a deliberate design decision — PhishGuard does not force a confident guess when the URL-structure evidence is ambiguous.
 
-**Note on a real design change made in this pass:** the earlier version
-of this app had a fourth, in-between "Suspicious" label. Per the current
-product decision, the UI now shows exactly three outcomes. The score
-range that used to trigger "Suspicious" now maps to **Phish** — not
-folded into "Safe" — so an ambiguous signal never quietly becomes a
-"Safe" verdict.
-
-### Honest failure states (never silently "Safe")
-
-| Situation | What you see |
-|---|---|
-| Empty input | "Please enter a URL." |
-| Garbage / non-URL text | "Invalid Input" — explains why, no verdict shown |
-| `model.pkl`/`nn_model.pkl` missing or corrupted | A visible warning banner; PhishGuard keeps working using **rule-based heuristics only**, clearly labeled as such in the result |
-| Model scoring throws an unexpected error | "Analysis Failed" — no verdict shown |
-
----
-
-## Architecture
 
 ```
 app.py            Streamlit UI. Owns presentation only — validation,
@@ -90,20 +74,6 @@ data/url_dataset.csv    ~450k labeled URLs used to train both models.
 tests/                Unit tests + Streamlit AppTest end-to-end tests.
 ```
 
-### What changed from the previous structure
-
-The 18-feature extraction function used to be copy-pasted independently
-in `app.py`, the old `detector.py`, `train_model.py`, and
-`train_nn_model.py` — four copies that had to be kept manually in sync
-with what `model.pkl`/`nn_model.pkl` were actually trained on. That's a
-real feature-mismatch risk: if any one copy drifted, the models would
-silently receive a different feature vector than they were trained on
-and produce meaningless predictions with no error. All four now import
-the same `features.py`. The old `detector.py` also loaded models and ran
-an **unguarded interactive `input()` loop at module import time** —
-meaning `import detector` from anywhere (e.g. to reuse a helper) would
-hang waiting on stdin. This is fixed: the CLI loop only runs under
-`if __name__ == "__main__":`.
 
 ---
 
@@ -159,22 +129,69 @@ pip install -r requirements.txt
 python -m unittest discover -s tests -v
 ```
 
-**40 tests, all passing** at the time of this pass — a mix of:
+**66 tests, all passing** at the time of this pass — a mix of:
 - `tests/test_features.py` — input validation (valid/invalid/garbage/IP/
-  too-long), the 18-feature vector shape, suspicious-score behavior,
-  impersonation detection, trusted-domain checks.
-- `tests/test_model_utils.py` — real model loading (the actual shipped
-  `model.pkl`/`nn_model.pkl`), missing/corrupted model files, the full
-  `scan_url()` pipeline for Safe/Phish/Impersonating paths, degraded
-  heuristics-only mode, and a simulated model-scoring exception
-  (confirms it becomes "Analysis Failed," never "Safe").
+  too-long, plus a regression test for `@`-obfuscated URLs that were
+  previously rejected outright instead of flagged), the 18-feature
+  vector shape, suspicious-score behavior including the `@` indicator,
+  impersonation detection including a regression test for the
+  real-domain-as-decoy-prefix bypass, trusted-domain checks including a
+  regression test for the `sites.google.com` fix.
+- `tests/test_model_utils.py` — real model loading (the actual shipped,
+  retrained `model.pkl`/`nn_model.pkl`), missing/corrupted model files,
+  the full `scan_url()` pipeline for Safe/Suspicious/Phish/Impersonating
+  paths, degraded heuristics-only mode, a simulated model-scoring
+  exception (confirms it becomes "Analysis Failed," never "Safe"), a
+  dedicated regression suite for the subdomain-bias fix, and a dedicated
+  regression suite for the HTTP/HTTPS bias fix (including a direct check
+  that scheme alone no longer swings the score by more than 0.6, and
+  that the security note is correctly separated from the phishing
+  verdict).
 - `tests/test_app_smoke.py` — Streamlit `AppTest` end-to-end: app boot,
-  a real scan for each of the three labels, invalid-input handling,
-  empty-input handling, and models-unavailable behavior, all driven
-  through the actual `app.py`.
+  a real scan for each label, invalid-input handling, empty-input
+  handling, and models-unavailable behavior, all driven through the
+  actual `app.py`.
+
+Beyond the automated suite, this pass also ran the retrained models
+against 200 random held-out legitimate URLs and 200 random held-out
+phishing URLs from `data/url_dataset.csv` (not used for training), and
+a dedicated evaluation matrix (`eval_matrix.py`) covering legitimate,
+security-testing, phishing-like (IP-based, impersonation, `@`
+obfuscation, excessive subdomains, suspicious TLDs), and malformed URLs
+— see "The HTTP/HTTPS bug" and "Model retraining" above for the results.
+
+
+open user-content publishing platform — anyone can host a page there)
+was being blanket-trusted purely because it technically ends with
+`.google.com`, unlike Google's own first-party services
+(`mail`/`docs`/`drive`/`accounts.google.com`), which correctly remain
+trusted.
+
+**Held-out empirical results after the fix** (200 random legitimate +
+200 random phishing URLs from the dataset, not used in training):
+- Legitimate: **200/200 (100%) correctly Safe** — zero false positives.
+- Phishing: **190/200 (95%) correctly flagged** — the 10 remaining
+  misses are a genuinely hard, honestly-documented limitation (see
+  below), not a regression from this fix.
 
 ## Limitations
 
+- **The HTTPS-bias fix traded some recall for honesty.** Reducing the
+  model's over-reliance on `is_https` measurably lowered its raw
+  phishing recall (~95% → ~80% on the gradient boosting model in
+  isolation) *before* accounting for the new Suspicious tier, which
+  absorbs much of that lost certainty rather than silently becoming
+  "Safe." This is a deliberate, disclosed trade-off: a model that is
+  95% "accurate" by leaning almost entirely on one overweighted, brittle
+  signal is not actually a better detector than one that is more modest
+  but doesn't break the moment a phishing page adds a free TLS
+  certificate (or a legitimate page is tested over plain HTTP).
+- **URL-structure-only precision on Phish/Impersonating specifically is
+  now ~58%** on a 200-URL held-out phishing sample (116/200 landed
+  exactly on Phish/Impersonating; most of the rest correctly landed on
+  Suspicious, not Safe — see "The HTTP/HTTPS bug" above for the full
+  breakdown). This reflects the tool being deliberately more willing to
+  say "I'm not sure" than to guess confidently in either direction.
 - **No sidebar or multi-page navigation** — PhishGuard is intentionally a
   single-page tool (`layout="centered"`), so there's no
   collapse/reopen-navigation concern to fix here; there's nothing to
@@ -184,13 +201,25 @@ python -m unittest discover -s tests -v
 - **Heuristic + lexical features only** — PhishGuard does not fetch the
   target URL, inspect page content, check DNS/WHOIS, or query any
   external threat-intelligence API. Classification is based entirely on
-  the URL string's own structure and two models trained on that.
+  the URL string's own structure and two models trained on that. This is
+  the direct cause of the remaining false negatives in the held-out
+  test: phishing pages hosted on entirely legitimate, common free
+  platforms (Google Sites, Wix, 000webhostapp) produce a URL that looks
+  structurally unremarkable by every available signal — catching these
+  would require inspecting the actual page content, which is out of
+  scope for a URL-structure-only detector.
 - **Small trusted-brand/domain lists** (`SAFE_DOMAINS`, `TRUSTED_BRANDS`
   in `features.py`) — only a handful of well-known brands are checked
   for impersonation; this is not an exhaustive brand-protection list.
+- **The `@`/impersonation fixes only cover the patterns tested for.**
+  Homograph/punycode domains (e.g. a Cyrillic lookalike of "apple.com")
+  are not currently detected at all -- `TRUSTED_BRANDS`/impersonation
+  detection operates on the literal ASCII string.
 - **`data/url_dataset.csv` is ~32MB** — fine for local use, but worth
   knowing before committing it repeatedly; consider Git LFS if it starts
-  growing further. Not changed in this pass.
+  growing further. `data/url_dataset_augmented.csv` (the rebalanced
+  training set used to retrain the shipped models) is the same size and
+  kept alongside it for reproducibility.
 - **Model files are loaded via `pickle`**, which can execute arbitrary
   code if the `.pkl` file is ever tampered with. This is inherent to how
   scikit-learn model persistence normally works and wasn't changed here;

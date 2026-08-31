@@ -77,6 +77,38 @@ class TestAppSmoke(unittest.TestCase):
             at.button[0].click().run(timeout=30)
             self.assertFalse(at.exception)
 
+    def test_why_this_result_shows_tiered_explanation_not_flat_keyword_dump(self):
+        """Regression test for a real audit finding: the UI's "Why this
+        result?" section was still calling the old flat keyword-list
+        explanation even after a much better tiered, classification-aware
+        one had already been built elsewhere in the codebase and never
+        wired in -- so a bare 'login' keyword rendered as if it were
+        meaningful phishing evidence, for every classification including
+        Safe. Drives the actual UI, not just the underlying function."""
+        at = AppTest.from_file(APP_PATH)
+        at.run(timeout=30)
+        at.text_input[0].set_value("https://google-login.com")
+        at.button[0].click().run(timeout=30)
+        self.assertFalse(at.exception)
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("Strong indicators", body)
+        self.assertIn("recognizable Google brand name", body)
+        self.assertIn("does not match Google", body)
+        # The old flat behavior showed the bare keyword line with no
+        # framing at all -- it must now only ever appear demoted, under
+        # "Supporting indicators", never presented as primary evidence.
+        self.assertIn("Supporting indicators", body)
+
+    def test_legitimate_login_page_explanation_does_not_mention_keyword_as_evidence(self):
+        at = AppTest.from_file(APP_PATH)
+        at.run(timeout=30)
+        at.text_input[0].set_value("https://accounts.google.com/login")
+        at.button[0].click().run(timeout=30)
+        self.assertFalse(at.exception)
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("known, established website", body)
+        self.assertNotIn("Strong indicators", body)
+
 
 if __name__ == "__main__":
     unittest.main()

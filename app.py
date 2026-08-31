@@ -1,5 +1,6 @@
 import streamlit as st
 
+import features as feat
 import model_utils as mu
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,7 @@ st.markdown("""
     border: 1px solid; font-size: 15px;
 }
 .pg-card-safe{ background: rgba(0,200,83,.08); border-color: #1f9c50; }
+.pg-card-suspicious{ background: rgba(255,193,7,.08); border-color: #b5860a; }
 .pg-card-phish{ background: rgba(255,82,82,.08); border-color: #c23b3b; }
 .pg-card-impersonating{ background: rgba(255,82,82,.10); border-color: #c23b3b; }
 .pg-card-invalid{ background: rgba(155,179,201,.08); border-color: #3d5776; }
@@ -58,6 +60,16 @@ st.markdown("""
 
 .pg-verdict{ font-size: 20px; font-weight: 700; margin-bottom: 4px; }
 .pg-note{ color: #b7c7db; font-size: 13.5px; margin-top: 2px; }
+.pg-security-note{
+    background: rgba(255,193,7,.06); border: 1px solid #6b5a1f; border-radius: 8px;
+    padding: 10px 14px; margin-top: 10px; font-size: 13.5px; color: #d7c88f;
+}
+.pg-indicators{ margin: 10px 0 0 0; padding-left: 20px; color: #b7c7db; font-size: 13.5px; line-height: 1.7; }
+.pg-indicators-strong{ color: #e0a0a0; }
+.pg-indicator-tier{
+    font-size: 12px; font-weight: 700; color: #7d92a8; margin-top: 14px;
+    text-transform: uppercase; letter-spacing: .04em;
+}
 
 .pg-rec-title{ font-size: 14px; font-weight: 700; color: #9bb3c9; margin: 22px 0 8px 0;
     text-transform: uppercase; letter-spacing: .04em; }
@@ -110,6 +122,12 @@ RECOMMENDATIONS = {
         "Always verify the URL before entering sensitive information.",
         "Keep your browser and antivirus software updated.",
     ],
+    mu.LABEL_SUSPICIOUS: [
+        "The available evidence is not sufficient to confidently call this Safe or Phishing.",
+        "Avoid entering passwords, banking details, or personal information until you can verify the site independently.",
+        "Consider looking up the domain owner/reputation before proceeding.",
+        "If you followed a link to get here, verify it came from a trusted source.",
+    ],
     mu.LABEL_PHISH: [
         "Leave the website immediately.",
         "Do NOT enter passwords, banking details, or personal information.",
@@ -120,6 +138,7 @@ RECOMMENDATIONS = {
 
 VERDICT_DISPLAY = {
     mu.LABEL_SAFE: ("✅ Safe Website", "pg-card-safe"),
+    mu.LABEL_SUSPICIOUS: ("⚠️ Suspicious — Insufficient Evidence to Confirm", "pg-card-suspicious"),
     mu.LABEL_PHISH: ("🚨 Phishing Website", "pg-card-phish"),
     mu.LABEL_IMPERSONATING: ("🚨 Impersonation Website", "pg-card-impersonating"),
 }
@@ -167,6 +186,42 @@ if scan_clicked:
                 + '</div>',
                 unsafe_allow_html=True,
             )
+
+            # A missing-HTTPS security note is shown separately from the
+            # phishing verdict, on purpose -- an unencrypted connection is
+            # a real security-posture observation worth surfacing, but it
+            # is never treated as phishing evidence on its own (see
+            # features.connection_security_note's docstring).
+            if result.security_note:
+                st.markdown(
+                    f'<div class="pg-security-note">🔓 {result.security_note} '
+                    f'This is a connection-security observation, separate from the phishing '
+                    f'classification above.</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Tiered, classification-aware explanation -- built from the
+            # SAME evidence that produced result.label, never a flat dump
+            # of every rule that happened to fire (see
+            # model_utils.build_explanation's docstring for the full
+            # audit finding this replaced: a bare 'login' keyword was
+            # previously shown as if it were meaningful evidence on its
+            # own, for every classification including Safe).
+            explanation = mu.build_explanation(result)
+            with st.expander("Why this result?"):
+                st.markdown(f'<div class="pg-note">{explanation.summary}</div>', unsafe_allow_html=True)
+                if explanation.strong:
+                    st.markdown('<div class="pg-indicator-tier">Strong indicators</div>', unsafe_allow_html=True)
+                    items = "".join(f"<li>{i}</li>" for i in explanation.strong)
+                    st.markdown(f'<ul class="pg-indicators pg-indicators-strong">{items}</ul>', unsafe_allow_html=True)
+                if explanation.supporting:
+                    st.markdown('<div class="pg-indicator-tier">Supporting indicators</div>', unsafe_allow_html=True)
+                    items = "".join(f"<li>{i}</li>" for i in explanation.supporting)
+                    st.markdown(f'<ul class="pg-indicators">{items}</ul>', unsafe_allow_html=True)
+                if explanation.informational:
+                    st.markdown('<div class="pg-indicator-tier">Informational</div>', unsafe_allow_html=True)
+                    items = "".join(f"<li>{i}</li>" for i in explanation.informational)
+                    st.markdown(f'<ul class="pg-indicators">{items}</ul>', unsafe_allow_html=True)
 
             st.markdown('<div class="pg-rec-title">Recommendations</div>', unsafe_allow_html=True)
             items = "".join(f"<li>{r}</li>" for r in RECOMMENDATIONS[result.label])

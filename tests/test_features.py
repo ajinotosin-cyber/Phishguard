@@ -40,6 +40,25 @@ class TestValidateUrlInput(unittest.TestCase):
         ok, reason = feat.validate_url_input("mail.google.com")
         self.assertTrue(ok)
 
+    def test_userinfo_at_host_url_is_valid_not_rejected(self):
+        """Regression test for a real bug found via testing: a URL using
+        the classic 'trusted-looking@actual-host' obfuscation trick
+        (valid syntax per RFC 3986's userinfo component) was being
+        rejected outright as 'invalid input' because the hostname-shape
+        regex doesn't allow '@' -- silently discarding a genuine
+        phishing indicator instead of flagging it. The real host (after
+        the @) must still look like a real hostname; the URL itself must
+        not be thrown out."""
+        ok, reason = feat.validate_url_input("https://user@malicious-payments.tk/login")
+        self.assertTrue(ok, reason)
+
+    def test_userinfo_at_host_with_invalid_real_host_still_rejected(self):
+        """The fix must not become a blanket bypass -- if the ACTUAL host
+        (after the @) doesn't look like a real hostname (here: no dot at
+        all), it's still correctly rejected."""
+        ok, reason = feat.validate_url_input("https://user@localhost")
+        self.assertFalse(ok)
+
 
 class TestFeatureExtraction(unittest.TestCase):
     def test_feature_vector_length_matches_models(self):
@@ -74,6 +93,20 @@ class TestSuspiciousScore(unittest.TestCase):
         score = feat.suspicious_score("http://192.168.1.1/login/verify/secure/account.xyz")
         self.assertGreaterEqual(score, 3)
 
+    def test_at_symbol_in_host_raises_score(self):
+        """Regression test: '@' in the host is a real, explainable
+        phishing indicator (the classic userinfo-obfuscation trick) --
+        it must contribute to the score, not just silently exist as an
+        unexplained raw ML feature."""
+        self.assertGreater(
+            feat.suspicious_score("https://user@malicious-payments.tk/login"),
+            feat.suspicious_score("https://malicious-payments.tk/login"),
+        )
+
+    def test_at_symbol_explained_in_indicators(self):
+        indicators = feat.explain_indicators("https://user@malicious-payments.tk/login")
+        self.assertTrue(any("@" in i for i in indicators))
+
 
 class TestImpersonation(unittest.TestCase):
     def test_flags_brand_without_real_domain(self):
@@ -89,6 +122,18 @@ class TestImpersonation(unittest.TestCase):
         result = feat.detect_impersonation("https://example.com")
         self.assertIsNone(result)
 
+    def test_flags_real_domain_embedded_as_decoy_prefix(self):
+        """Regression test for a real bypass found via testing: a classic
+        phishing pattern embeds the real brand domain as a decoy prefix
+        before the actual (unrelated) domain -- e.g.
+        www.paypal.com.security-check-update.info is NOT paypal.com, it's
+        security-check-update.info. The old substring check against the
+        whole URL missed this because "paypal.com" is literally present
+        somewhere in the string, even though it isn't the actual domain."""
+        result = feat.detect_impersonation("https://www.paypal.com.security-check-update.info/signin")
+        self.assertIsNotNone(result)
+        self.assertIn("Paypal", result)
+
 
 class TestTrustedDomain(unittest.TestCase):
     def test_trusted_domain_true(self):
@@ -99,6 +144,22 @@ class TestTrustedDomain(unittest.TestCase):
 
     def test_untrusted_domain_false(self):
         self.assertFalse(feat.is_trusted_domain("https://totally-not-google.com"))
+
+    def test_user_content_hosting_subdomain_not_trusted(self):
+        """Regression test for a real false negative found via testing:
+        sites.google.com is Google's free, open user-content publishing
+        platform -- anyone can host a page there, including phishing
+        pages -- yet it technically ends with '.google.com' and was
+        being blanket-trusted. Unlike Google's own first-party services
+        (mail/docs/drive/accounts.google.com), it must not inherit trust."""
+        self.assertFalse(feat.is_trusted_domain("https://sites.google.com/site/anything/"))
+
+    def test_other_first_party_google_subdomains_still_trusted(self):
+        """The exclusion must be narrow -- it should not accidentally
+        strip trust from Google's own legitimate services."""
+        for sub in ("docs.google.com", "drive.google.com", "accounts.google.com"):
+            with self.subTest(sub=sub):
+                self.assertTrue(feat.is_trusted_domain(f"https://{sub}/"))
 
 
 if __name__ == "__main__":
